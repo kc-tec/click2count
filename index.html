@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Click Counter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* Prevent text selection so rapid clicking is smooth */
+            user-select: none;
+            -webkit-user-select: none; 
+            touch-action: manipulation;
+        }
+
+        /* Animation for the number popping */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .pop-anim {
+            animation: pop 0.15s ease-out;
+        }
+
+        /* Ripple effect styles */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            background-color: rgba(255, 255, 255, 0.3);
+            pointer-events: none; 
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white h-screen w-screen overflow-hidden flex flex-col items-center justify-center cursor-pointer font-sans">
+
+    <!-- Counter Display -->
+    <div class="z-10 text-center">
+        <h1 id="counter" class="text-9xl font-bold tracking-tighter transition-transform duration-100">0</h1>
+        <p class="mt-4 text-gray-400 text-lg">Click anywhere to count</p>
+    </div>
+
+    <!-- Reset Button (Small, in corner) -->
+    <button onclick="event.stopPropagation(); resetCount()" class="absolute bottom-6 right-6 z-20 bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700">
+        Reset
+    </button>
+
+    <script>
+        let count = 0;
+        const counterElement = document.getElementById('counter');
+        const body = document.body;
+
+        // Sound effect (optional, synthesized simple beep)
+        // Kept silent by default for UX, but logic is easy to add if needed.
+
+        // Main Click Handler
+        document.addEventListener('click', (e) => {
+            // Increment logic
+            count++;
+            updateDisplay();
+            
+            // Text Pop Animation
+            counterElement.classList.remove('pop-anim');
+            void counterElement.offsetWidth; // Trigger reflow to restart animation
+            counterElement.classList.add('pop-anim');
+
+            // Ripple Effect at click position
+            createRipple(e.clientX, e.clientY);
+        });
+
+        // Handle Spacebar to count as well
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                count++;
+                updateDisplay();
+                counterElement.classList.remove('pop-anim');
+                void counterElement.offsetWidth;
+                counterElement.classList.add('pop-anim');
+                
+                // Create ripple in center for keyboard press
+                createRipple(window.innerWidth / 2, window.innerHeight / 2);
+            }
+        });
+
+        function updateDisplay() {
+            counterElement.textContent = count;
+        }
+
+        function resetCount() {
+            count = 0;
+            updateDisplay();
+        }
+
+        function createRipple(x, y) {
+            const ripple = document.createElement('span');
+            ripple.classList.add('ripple');
+            
+            // Make ripple size relative to viewport but substantial
+            const size = Math.max(window.innerWidth, window.innerHeight) * 0.1; 
+            
+            ripple.style.width = ripple.style.height = `${size}px`;
+            ripple.style.left = `${x - size/2}px`;
+            ripple.style.top = `${y - size/2}px`;
+            
+            body.appendChild(ripple);
+
+            // Cleanup DOM element after animation
+            ripple.addEventListener('animationend', () => {
+                ripple.remove();
+            });
+        }
+    </script>
+</body>
+</html>
+
