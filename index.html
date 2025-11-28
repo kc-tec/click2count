@@ -2,39 +2,46 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Screen Click Counter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Instant Click Counter</title>
+    
+    <!-- Favicon using inline SVG (No external file needed) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👆</text></svg>">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            /* Prevent text selection so rapid clicking is smooth */
+            /* Critical for speed: disables browser zooming/panning delays */
+            touch-action: none;
             user-select: none;
-            -webkit-user-select: none; 
-            touch-action: manipulation;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Courier New', Courier, monospace; /* Monospace prevents width jitter */
         }
 
-        /* Animation for the number popping */
-        @keyframes pop {
+        /* Hardware accelerated animation */
+        .pop {
+            animation: pop-scale 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes pop-scale {
             0% { transform: scale(1); }
-            50% { transform: scale(1.2); }
+            50% { transform: scale(1.15); }
             100% { transform: scale(1); }
         }
 
-        .pop-anim {
-            animation: pop 0.15s ease-out;
-        }
-
-        /* Ripple effect styles */
+        /* Highly optimized ripple using opacity/transform only */
         .ripple {
             position: absolute;
             border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
             transform: scale(0);
-            animation: ripple 0.6s linear;
-            background-color: rgba(255, 255, 255, 0.3);
-            pointer-events: none; 
+            pointer-events: none;
+            will-change: transform, opacity;
+            animation: ripple-anim 0.4s linear forwards;
         }
 
-        @keyframes ripple {
+        @keyframes ripple-anim {
             to {
                 transform: scale(4);
                 opacity: 0;
@@ -42,84 +49,94 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white h-screen w-screen overflow-hidden flex flex-col items-center justify-center cursor-pointer font-sans">
+<body class="bg-black text-white h-screen w-screen overflow-hidden flex flex-col items-center justify-center">
 
     <!-- Counter Display -->
-    <div class="z-10 text-center">
-        <h1 id="counter" class="text-9xl font-bold tracking-tighter transition-transform duration-100">0</h1>
-        <p class="mt-4 text-gray-400 text-lg">Click anywhere to count</p>
+    <div class="pointer-events-none z-10 flex flex-col items-center">
+        <div id="counter" class="text-[12rem] leading-none font-bold tracking-tighter">0</div>
+        <div class="mt-4 text-gray-500 text-sm uppercase tracking-widest opacity-60">Tap Anywhere</div>
     </div>
 
-    <!-- Reset Button (Small, in corner) -->
-    <button onclick="event.stopPropagation(); resetCount()" class="absolute bottom-6 right-6 z-20 bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700">
-        Reset
+    <!-- Reset Button -->
+    <!-- z-50 ensures it stays above ripples -->
+    <button id="resetBtn" class="absolute bottom-8 right-8 z-50 bg-gray-900 active:bg-gray-700 text-gray-400 px-6 py-3 rounded-full text-xs font-bold border border-gray-800 tracking-wider transition-colors">
+        RESET
     </button>
 
     <script>
         let count = 0;
-        const counterElement = document.getElementById('counter');
-        const body = document.body;
-
-        // Sound effect (optional, synthesized simple beep)
-        // Kept silent by default for UX, but logic is easy to add if needed.
-
-        // Main Click Handler
-        document.addEventListener('click', (e) => {
-            // Increment logic
-            count++;
-            updateDisplay();
-            
-            // Text Pop Animation
-            counterElement.classList.remove('pop-anim');
-            void counterElement.offsetWidth; // Trigger reflow to restart animation
-            counterElement.classList.add('pop-anim');
-
-            // Ripple Effect at click position
-            createRipple(e.clientX, e.clientY);
+        const counterEl = document.getElementById('counter');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        // We use pointerdown because it fires immediately on touch start
+        // 'click' waits for the finger to lift, causing lag.
+        window.addEventListener('pointerdown', handleInput);
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') handleInput(e);
         });
 
-        // Handle Spacebar to count as well
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') {
-                count++;
-                updateDisplay();
-                counterElement.classList.remove('pop-anim');
-                void counterElement.offsetWidth;
-                counterElement.classList.add('pop-anim');
-                
-                // Create ripple in center for keyboard press
-                createRipple(window.innerWidth / 2, window.innerHeight / 2);
+        function handleInput(e) {
+            // Check if we clicked the reset button
+            if (e.target === resetBtn || resetBtn.contains(e.target)) {
+                return;
             }
-        });
 
-        function updateDisplay() {
-            counterElement.textContent = count;
+            count++;
+            
+            // Use requestAnimationFrame for smooth UI update
+            requestAnimationFrame(() => {
+                counterEl.innerText = count;
+                triggerAnimation();
+            });
+
+            // Calculate coordinates for visual effect
+            let x, y;
+            if (e.type === 'keydown') {
+                x = window.innerWidth / 2;
+                y = window.innerHeight / 2;
+            } else {
+                x = e.clientX;
+                y = e.clientY;
+            }
+            createRipple(x, y);
         }
 
-        function resetCount() {
+        // Reset Logic
+        resetBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation(); // Stop the window listener from firing
             count = 0;
-            updateDisplay();
+            counterEl.innerText = 0;
+        });
+
+        // Optimized Animation Trigger
+        function triggerAnimation() {
+            counterEl.classList.remove('pop');
+            // Force reflow
+            void counterEl.offsetWidth; 
+            counterEl.classList.add('pop');
         }
 
         function createRipple(x, y) {
-            const ripple = document.createElement('span');
-            ripple.classList.add('ripple');
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
             
-            // Make ripple size relative to viewport but substantial
-            const size = Math.max(window.innerWidth, window.innerHeight) * 0.1; 
+            // Fixed size ripple for better performance consistency
+            const size = 100; 
             
-            ripple.style.width = ripple.style.height = `${size}px`;
+            ripple.style.width = `${size}px`;
+            ripple.style.height = `${size}px`;
             ripple.style.left = `${x - size/2}px`;
             ripple.style.top = `${y - size/2}px`;
             
-            body.appendChild(ripple);
+            document.body.appendChild(ripple);
 
-            // Cleanup DOM element after animation
-            ripple.addEventListener('animationend', () => {
+            // Garbage collection
+            setTimeout(() => {
                 ripple.remove();
-            });
+            }, 400);
         }
     </script>
 </body>
 </html>
+
 
